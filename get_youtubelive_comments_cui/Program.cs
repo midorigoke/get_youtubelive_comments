@@ -4,6 +4,9 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Mono.Options;
+using System.Net;
+using System.IO;
+using System.Text.RegularExpressions;
 
 namespace get_youtubelive_comments_cui
 {
@@ -73,6 +76,46 @@ namespace get_youtubelive_comments_cui
 					bouyomi_port = Int32.Parse(bouyomi_origin[1]);
 				}
 			}
+
+			if (video_id == null)
+			{
+				var video_id_request = WebRequest.Create("https://www.youtube.com/channel/" + channel_id + "/videos?flow=list&live_view=501&view=2");
+
+				video_id_request.ContentType = "";
+
+				try
+				{
+					using (var video_id_response = video_id_request.GetResponse())
+					{
+						using (var streamReader = new StreamReader(video_id_response.GetResponseStream(), Encoding.UTF8))
+						{
+							var video_id_regex = new Regex("href=\"\\/watch\\?v=(.+?)\"", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+
+							var video_id_match = video_id_regex.Match(streamReader.ReadToEnd());
+
+							if (!video_id_match.Success)
+							{
+								Console.Error.WriteLine("Error: ストリーミングが見つかりませんでした");
+
+								return;
+							}
+
+							var index1 = video_id_match.Value.LastIndexOf('=') + 1;
+							var index2 = video_id_match.Value.LastIndexOf('"');
+
+							video_id = video_id_match.Value.Substring(index1, index2 - index1);
+						}
+					}
+				}
+				catch
+				{
+					Console.Error.WriteLine("Error: ストリーミングの検索に失敗しました");
+
+					return;
+				}
+			}
+
+
 		}
 
 		static void show_usage()
