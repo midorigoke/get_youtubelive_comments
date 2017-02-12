@@ -1,12 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
 using Mono.Options;
 using System.Net;
 using System.IO;
 using System.Text.RegularExpressions;
+using Codeplex.Data;
 
 namespace get_youtubelive_comments_cui
 {
@@ -17,6 +16,7 @@ namespace get_youtubelive_comments_cui
 			string channel_id = null;
 			string video_id =null;
 			string api_key = null;
+			string live_chat_id = null;
 
 			bool show_help = false;
 			bool show_owners_message = false;
@@ -87,11 +87,11 @@ namespace get_youtubelive_comments_cui
 				{
 					using (var video_id_response = video_id_request.GetResponse())
 					{
-						using (var streamReader = new StreamReader(video_id_response.GetResponseStream(), Encoding.UTF8))
+						using (var video_id_stream = new StreamReader(video_id_response.GetResponseStream(), Encoding.UTF8))
 						{
 							var video_id_regex = new Regex("href=\"\\/watch\\?v=(.+?)\"", RegexOptions.IgnoreCase | RegexOptions.Singleline);
 
-							var video_id_match = video_id_regex.Match(streamReader.ReadToEnd());
+							var video_id_match = video_id_regex.Match(video_id_stream.ReadToEnd());
 
 							if (!video_id_match.Success)
 							{
@@ -114,6 +114,37 @@ namespace get_youtubelive_comments_cui
 					return;
 				}
 			}
+
+			var live_chat_id_request = WebRequest.Create("https://www.googleapis.com/youtube/v3/videos?part=liveStreamingDetails&id=" + video_id + "&key=" + api_key);
+
+			live_chat_id_request.ContentType = "";
+
+			try
+			{
+				using (var live_chat_id_response = live_chat_id_request.GetResponse())
+				{
+					using (var live_chat_id_stream = new StreamReader(live_chat_id_response.GetResponseStream(), Encoding.UTF8))
+					{
+						var live_chat_id_object = DynamicJson.Parse(live_chat_id_stream.ReadToEnd());
+
+						live_chat_id = live_chat_id_object.items[0].liveStreamingDetails.activeLiveChatId;
+
+						if (live_chat_id == null)
+						{
+							Console.Error.WriteLine("Error: Live Chat IDの取得に失敗しました");
+
+							return;
+						}
+					}
+				}
+			}
+			catch
+			{
+				Console.Error.WriteLine("Error: Live Chat IDの取得に失敗しました");
+
+				return;
+			}
+
 
 
 		}
