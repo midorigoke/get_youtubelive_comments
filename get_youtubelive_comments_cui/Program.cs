@@ -50,9 +50,9 @@ namespace get_youtubelive_comments_cui
 			{
 				{"h", "ヘルプを表示する", v => show_help = v != null},
 				{"o", "チャンネルオーナーのメッセージを表示する", v => show_owners_message = v != null},
-				{"i=", "取得間隔を指定する", v => interval = (int)(float.Parse(v) * 1000)},
-				{"b=", "棒読みちゃんに送信する", v => bouyomi_origin = v},
-				{"p=", "棒読みちゃんに送信するプレフィックスを指定する", v => bouyomi_prefix = v}
+				{"i=", "取得間隔としてVALUEを使用する", v => interval = (int)(float.Parse(v) * 1000)},
+				{"b=", "VALUEで待ち受けている棒読みちゃんに送信する(VALUEは'HOST:PORT'形式)", v => bouyomi_origin = v},
+				{"p=", "棒読みちゃんに送信するプレフィックスとしてVALUEを使用する", v => bouyomi_prefix = v}
 			};
 
 			try
@@ -62,6 +62,18 @@ namespace get_youtubelive_comments_cui
 			catch
 			{
 				show_usage();
+				Console.ReadKey();
+
+				return;
+			}
+
+			if (show_help)
+			{
+				show_usage();
+				Console.Error.WriteLine();
+				Console.Error.WriteLine("Options");
+				option.WriteOptionDescriptions(Console.Error);
+				Console.ReadKey();
 
 				return;
 			}
@@ -69,6 +81,7 @@ namespace get_youtubelive_comments_cui
 			if (other_args.Count < 2)
 			{
 				show_usage();
+				Console.ReadKey();
 
 				return;
 			}
@@ -85,6 +98,7 @@ namespace get_youtubelive_comments_cui
 
 				default:
 					show_usage();
+					Console.ReadKey();
 
 					return;
 			}
@@ -109,7 +123,14 @@ namespace get_youtubelive_comments_cui
 
 				if (bouyomi_origin_array[1] != "")
 				{
-					bouyomi_port = int.Parse(bouyomi_origin_array[1]);
+					try
+					{
+						bouyomi_port = int.Parse(bouyomi_origin_array[1]);
+					}
+					catch
+					{
+						bouyomi_port = 50001;
+					}
 				}
 			}
 
@@ -130,6 +151,7 @@ namespace get_youtubelive_comments_cui
 							if (!video_id_match.Success)
 							{
 								Console.Error.WriteLine("Error: ストリーミングが見つかりませんでした");
+								Console.ReadKey();
 
 								return;
 							}
@@ -144,6 +166,7 @@ namespace get_youtubelive_comments_cui
 				catch
 				{
 					Console.Error.WriteLine("Error: ストリーミングの検索に失敗しました");
+					Console.ReadKey();
 
 					return;
 				}
@@ -164,6 +187,7 @@ namespace get_youtubelive_comments_cui
 						if (live_chat_id == null)
 						{
 							Console.Error.WriteLine("Error: Live Chat IDの取得に失敗しました");
+							Console.ReadKey();
 
 							return;
 						}
@@ -173,6 +197,7 @@ namespace get_youtubelive_comments_cui
 			catch
 			{
 				Console.Error.WriteLine("Error: Live Chat IDの取得に失敗しました");
+				Console.ReadKey();
 
 				return;
 			}
@@ -277,7 +302,6 @@ namespace get_youtubelive_comments_cui
 			Console.Error.WriteLine("使用法1: get_youtubelive_comments_cui video_id api_key [option]...");
 			Console.Error.WriteLine("使用法2: get_youtubelive_comments_cui channel_id api_key [option]...");
 			Console.Error.WriteLine("'get_youtubelive_comments_cui -h' でヘルプを表示します");
-			Console.ReadKey();
 		}
 	}
 }
