@@ -7,6 +7,7 @@ using System.IO;
 using System.Text.RegularExpressions;
 using Codeplex.Data;
 using System.Threading;
+using System.Net.Sockets;
 
 namespace get_youtubelive_comments_cui
 {
@@ -15,7 +16,7 @@ namespace get_youtubelive_comments_cui
 		static void Main(string[] args)
 		{
 			string channel_id = null;
-			string video_id =null;
+			string video_id = null;
 			string api_key = null;
 			string live_chat_id = null;
 
@@ -25,10 +26,17 @@ namespace get_youtubelive_comments_cui
 			int interval = 1000;
 
 			bool send_to_bouyomi = false;
-			string[] bouyomi_origin = null;
+			string bouyomi_origin = "";
 			string bouyomi_host = "localhost";
 			int bouyomi_port = 50001;
-			string bouyomi_prefix = null;
+			string bouyomi_prefix = "";
+
+			short bouyomi_command = 1;
+			short bouyomi_speed = -1;
+			short bouyomi_tone = -1;
+			short bouyomi_volume = -1;
+			short bouyomi_voice = 0;
+			byte bouyomi_code = 0;
 
 			dynamic messages_object = null;
 			var messages_dictionary = new Dictionary<string, object[]>();
@@ -36,16 +44,27 @@ namespace get_youtubelive_comments_cui
 			var messages_ids_old = new List<string>();
 			var messages_ids_diff = new List<string>();
 
+			var other_args = new List<string>();
+
 			var option = new OptionSet()
 			{
 				{"h", "ヘルプを表示する", v => show_help = v != null},
 				{"o", "チャンネルオーナーのメッセージを表示する", v => show_owners_message = v != null},
 				{"i=", "取得間隔を指定する", v => interval = (int)(float.Parse(v) * 1000)},
-				{"b:", "棒読みちゃんに送信する", v => {send_to_bouyomi = v != null; bouyomi_origin = v.Split('=');}},
+				{"b=", "棒読みちゃんに送信する", v => bouyomi_origin = v},
 				{"p=", "棒読みちゃんに送信するプレフィックスを指定する", v => bouyomi_prefix = v}
 			};
 
-			var other_args = option.Parse(args);
+			try
+			{
+				other_args = option.Parse(args);
+			}
+			catch
+			{
+				show_usage();
+
+				return;
+			}
 
 			if (other_args.Count < 2)
 			{
@@ -72,16 +91,25 @@ namespace get_youtubelive_comments_cui
 
 			api_key = other_args[1];
 
-			if (send_to_bouyomi == true)
+			if (bouyomi_origin != null)
 			{
-				if (bouyomi_origin[0] != "")
+				send_to_bouyomi = true;
+
+				if (!bouyomi_origin.Contains(":"))
 				{
-					bouyomi_host = bouyomi_origin[0];
+					bouyomi_origin += ':';
 				}
 
-				if (bouyomi_origin[1] != "")
+				string[] bouyomi_origin_array = bouyomi_origin.Split(':');
+
+				if (bouyomi_origin_array[0] != "")
 				{
-					bouyomi_port = Int32.Parse(bouyomi_origin[1]);
+					bouyomi_host = bouyomi_origin_array[0];
+				}
+
+				if (bouyomi_origin_array[1] != "")
+				{
+					bouyomi_port = int.Parse(bouyomi_origin_array[1]);
 				}
 			}
 
@@ -119,7 +147,7 @@ namespace get_youtubelive_comments_cui
 
 					return;
 				}
-			}			
+			}
 
 			var live_chat_id_request = WebRequest.Create("https://www.googleapis.com/youtube/v3/videos?part=liveStreamingDetails&id=" + video_id + "&key=" + api_key);
 
@@ -155,12 +183,19 @@ namespace get_youtubelive_comments_cui
 
 				messages_object = null;
 
-				using (var messages_response = messages_request.GetResponse())
+				try
 				{
-					using (var messages_stream = new StreamReader(messages_response.GetResponseStream()))
+					using (var messages_response = messages_request.GetResponse())
 					{
-						messages_object = DynamicJson.Parse(messages_stream.ReadToEnd());
+						using (var messages_stream = new StreamReader(messages_response.GetResponseStream()))
+						{
+							messages_object = DynamicJson.Parse(messages_stream.ReadToEnd());
+						}
 					}
+				}
+				catch
+				{
+					Console.Error.WriteLine("Error: コメントの取得に失敗しました");
 				}
 
 				messages_ids.Clear();
@@ -185,7 +220,45 @@ namespace get_youtubelive_comments_cui
 				{
 					if (show_owners_message || !Convert.ToBoolean(messages_dictionary[value][2]))
 					{
-						Console.WriteLine(messages_dictionary[value][0] + " : " + messages_dictionary[value][1]);
+						var message_sender = messages_dictionary[value][0];
+						var message_text = messages_dictionary[value][1];
+
+						Console.WriteLine(message_sender + " : " + message_text);
+
+						if (send_to_bouyomi)
+						{
+							byte[] bouyomi_message = Encoding.UTF8.GetBytes(bouyomi_prefix + message_sender + ',' + message_text);
+							int bouyomi_message_length = bouyomi_message.Length;
+
+							TcpClient tc = null;
+
+							try
+							{
+								tc = new TcpClient(bouyomi_host, bouyomi_port);
+							}
+							catch
+							{
+								Console.Error.WriteLine("Error: 棒読みちゃんへの接続に失敗しました");
+							}
+
+							if (tc != null)
+							{
+								using (var ns = tc.GetStream())
+								{
+									using (var bw = new BinaryWriter(ns))
+									{
+										bw.Write(bouyomi_command);
+										bw.Write(bouyomi_speed);
+										bw.Write(bouyomi_tone);
+										bw.Write(bouyomi_volume);
+										bw.Write(bouyomi_voice);
+										bw.Write(bouyomi_code);
+										bw.Write(bouyomi_message_length);
+										bw.Write(bouyomi_message);
+									}
+								}
+							}
+						}
 					}
 				}
 
@@ -204,6 +277,7 @@ namespace get_youtubelive_comments_cui
 			Console.Error.WriteLine("使用法1: get_youtubelive_comments_cui video_id api_key [option]...");
 			Console.Error.WriteLine("使用法2: get_youtubelive_comments_cui channel_id api_key [option]...");
 			Console.Error.WriteLine("'get_youtubelive_comments_cui -h' でヘルプを表示します");
+			Console.ReadKey();
 		}
 	}
 }
