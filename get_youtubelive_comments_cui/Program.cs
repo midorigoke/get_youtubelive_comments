@@ -299,8 +299,8 @@ namespace get_youtubelive_comments_cui
 
 		static void show_usage()
 		{
-			Console.Error.WriteLine("使用法1: get_youtubelive_comments_cui video_id api_key [option]...");
-			Console.Error.WriteLine("使用法2: get_youtubelive_comments_cui channel_id api_key [option]...");
+			Console.Error.WriteLine("使用法1: get_youtubelive_comments_cui <video id> <api key> [option]...");
+			Console.Error.WriteLine("使用法2: get_youtubelive_comments_cui <channel id> <api key> [option]...");
 			Console.Error.WriteLine("'get_youtubelive_comments_cui -h' でヘルプを表示します");
 		}
 	}
