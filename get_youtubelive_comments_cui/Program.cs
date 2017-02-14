@@ -6,6 +6,7 @@ using System.Net;
 using System.IO;
 using System.Text.RegularExpressions;
 using Codeplex.Data;
+using System.Threading;
 
 namespace get_youtubelive_comments_cui
 {
@@ -21,23 +22,30 @@ namespace get_youtubelive_comments_cui
 			bool show_help = false;
 			bool show_owners_message = false;
 
+			int interval = 1000;
+
 			bool send_to_bouyomi = false;
 			string[] bouyomi_origin = null;
 			string bouyomi_host = "localhost";
 			int bouyomi_port = 50001;
 			string bouyomi_prefix = null;
 
-			List<string> other_args;
+			dynamic messages_object = null;
+			var messages_dictionary = new Dictionary<string, object[]>();
+			var messages_ids = new List<string>();
+			var messages_ids_old = new List<string>();
+			var messages_ids_diff = new List<string>();
 
 			var option = new OptionSet()
 			{
 				{"h", "ヘルプを表示する", v => show_help = v != null},
 				{"o", "チャンネルオーナーのメッセージを表示する", v => show_owners_message = v != null},
+				{"i=", "取得間隔を指定する", v => interval = (int)(float.Parse(v) * 1000)},
 				{"b:", "棒読みちゃんに送信する", v => {send_to_bouyomi = v != null; bouyomi_origin = v.Split('=');}},
 				{"p=", "棒読みちゃんに送信するプレフィックスを指定する", v => bouyomi_prefix = v}
 			};
 
-			other_args = option.Parse(args);
+			var other_args = option.Parse(args);
 
 			if (other_args.Count < 2)
 			{
@@ -81,8 +89,6 @@ namespace get_youtubelive_comments_cui
 			{
 				var video_id_request = WebRequest.Create("https://www.youtube.com/channel/" + channel_id + "/videos?flow=list&live_view=501&view=2");
 
-				video_id_request.ContentType = "";
-
 				try
 				{
 					using (var video_id_response = video_id_request.GetResponse())
@@ -113,11 +119,9 @@ namespace get_youtubelive_comments_cui
 
 					return;
 				}
-			}
+			}			
 
 			var live_chat_id_request = WebRequest.Create("https://www.googleapis.com/youtube/v3/videos?part=liveStreamingDetails&id=" + video_id + "&key=" + api_key);
-
-			live_chat_id_request.ContentType = "";
 
 			try
 			{
@@ -145,7 +149,53 @@ namespace get_youtubelive_comments_cui
 				return;
 			}
 
+			while (true)
+			{
+				var messages_request = WebRequest.Create("https://www.googleapis.com/youtube/v3/liveChat/messages?part=snippet,authorDetails&liveChatId=" + live_chat_id + "&key=" + api_key);
 
+				messages_object = null;
+
+				using (var messages_response = messages_request.GetResponse())
+				{
+					using (var messages_stream = new StreamReader(messages_response.GetResponseStream()))
+					{
+						messages_object = DynamicJson.Parse(messages_stream.ReadToEnd());
+					}
+				}
+
+				messages_ids.Clear();
+				messages_dictionary.Clear();
+
+				foreach (var value in messages_object.items)
+				{
+					messages_ids.Add(value.id);
+
+					messages_dictionary.Add(value.id, new object[]
+					{
+						value.authorDetails.displayName,
+						value.snippet.textMessageDetails.messageText,
+						value.authorDetails.isChatOwner
+					});
+				}
+
+				messages_ids_diff = new List<string>(messages_ids);
+				messages_ids_diff.RemoveAll(messages_ids_old.Contains);
+
+				foreach (var value in messages_ids_diff)
+				{
+					if (show_owners_message || !Convert.ToBoolean(messages_dictionary[value][2]))
+					{
+						Console.WriteLine(messages_dictionary[value][0] + " : " + messages_dictionary[value][1]);
+					}
+				}
+
+				messages_ids_old.Clear();
+				messages_ids_old = new List<string>(messages_ids);
+
+				messages_ids_diff.Clear();
+
+				Thread.Sleep(interval);
+			}
 
 		}
 
